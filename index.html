@@ -4,11 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>نظام بحث وقف فاطمة هانم البقلية</title>
-    <script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tableexport.js/dist/js/tableexport.min.js"></script>
+    
+    <!-- تحسين الأداء: تحميل المكتبات بشكل أسرع -->
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
     <style>
         :root{--main:#0f3460;--accent:#1e56a0;--success:#16a085;--light:#f8f9fa;--gray:#6c757d;--border:#dee2e6}
         *{margin:0;padding:0;box-sizing:border-box}
@@ -18,7 +23,7 @@
         h1{font-size:2.3rem;margin-bottom:8px}.subtitle{font-size:1.2rem;opacity:.95}
         .loading{text-align:center;padding:60px;font-size:1.5rem;color:#555;background:#f8f9fa;margin:20px;border-radius:15px}
         .actions{padding:20px;background:#f1f5f9;display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
-        .btn{padding:13px 28px;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:1rem;transition:all .3s;display:flex;align-items:center;gap:8px;color:white}
+        .btn{padding:13px 28px;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:1rem;transition:all .3s;display:inline-flex;align-items:center;gap:8px;color:white}
         .btn-primary{background:var(--accent)}.btn-success{background:var(--success)}.btn:hover{transform:translateY(-4px);box-shadow:0 10px 25px rgba(0,0,0,.2)}
         .controls{padding:25px;background:white;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;border-bottom:2px solid var(--border)}
         .search-box{position:relative}
@@ -29,8 +34,8 @@
         select:focus{outline:none;border-color:var(--accent)}
         .stats{padding:18px 25px;background:#ecfdf5;color:var(--success);font-weight:bold;font-size:1.2rem;text-align:center}
         .table-container{overflow-x:auto;padding:0 20px 20px}
-        table{width:100%;border-collapse:collapse;margin-top:10px;font-size:1rem}
-        th{background:var(--main);color:white;padding:18px 12px;text-align:center;font-weight:bold}
+        table{width:100%;border-collapse:separate;border-spacing:0;margin-top:10px;font-size:1rem}
+        th{background:var(--main);color:white;padding:18px 12px;text-align:center;font-weight:bold;position:sticky;top:0;z-index:10}
         td{padding:16px 10px;text-align:center;border-bottom:1px solid var(--border)}
         tr:hover{background:#f8f9fa}
         .highlight{background:#dbeafe!important;font-weight:bold;color:#1e40af}
@@ -38,6 +43,7 @@
         .card{background:white;border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:18px;box-shadow:0 4px 15px rgba(0,0,0,.08)}
         .card h3{background:var(--accent);color:white;padding:12px;border-radius:10px;margin:-20px -20px 20px -20px;font-size:1.2rem}
         .card p{margin:10px 0}.card span{font-weight:bold;color:var(--main)}
+        .error{color:#c41e3a;background:#fee2e2;padding:20px;border-radius:12px;margin:20px;text-align:center}
         @media(max-width:992px){.table-container{display:none}.card-view{display:block}h1{font-size:1.9rem}}
         @media(max-width:480px){.actions{flex-direction:column}.btn{width:100%;justify-content:center}}
     </style>
@@ -46,13 +52,15 @@
     <div class="container">
         <header>
             <h1>نظام بحث وقف فاطمة هانم البقلية</h1>
-            <p class="subtitle">تحديث تلقائي - جميع الأحواض والمنافع</p>
+            <p class="subtitle">تحديث تلقائي يومي - جميع الأحواض والمنافع والتعديات</p>
         </header>
 
         <div class="loading" id="loading">
             <i class="fas fa-spinner fa-spin fa-3x"></i><br><br>
-            جاري تحميل البيانات...
+            جاري تحميل البيانات من المصدر...
         </div>
+
+        <div id="error" class="error" style="display:none;"></div>
 
         <div id="app" style="display:none;">
             <div class="actions">
@@ -60,29 +68,35 @@
                     <i class="fas fa-file-excel"></i> تصدير إلى إكسل
                 </button>
                 <button class="btn btn-primary" onclick="window.print()">
-                    <i class="fas fa-print"></i> طباعة
+                    <i class="fas fa-print"></i> طباعة النتائج
                 </button>
             </div>
 
             <div class="controls">
                 <div class="search-box">
                     <i class="fas fa-search search-icon"></i>
-                    <input type="text" id="globalSearch" placeholder="ابحث عن أي شيء (اسم، حوض، تعديات، رقم...)">
+                    <input type="text" id="globalSearch" placeholder="ابحث عن أي شيء: اسم، رقم، حوض، تعديات، ناحية...">
                 </div>
                 <select id="filterHolder"><option value="">جميع واضعي اليد</option></select>
                 <select id="filterBasin"><option value="">جميع الأحواض</option></select>
             </div>
 
             <div class="stats">
-                تم العثور على <span id="resultCount">0</span> سجل من إجمالي <span id="totalCount">0</span>
+                تم العثور على <strong><span id="resultCount">0</span></strong> سجل من إجمالي <strong><span id="totalCount">0</span></strong> سجل
             </div>
 
             <div class="table-container">
                 <table id="resultsTable">
                     <thead>
                         <tr>
-                            <th>م</th><th>اسم المستأجر / واضع اليد</th><th>اسم الوقف</th><th>الناحية</th>
-                            <th>س</th><th>ط</th><th>ف</th><th>التعديات</th><th>الحوض/منافع</th><th>اسم الحوض</th>
+                            <th>م</th>
+                            <th>اسم المستأجر / واضع اليد</th>
+                            <th>اسم الوقف</th>
+                            <th>الناحية</th>
+                            <th>س</th><th>ط</th><th>ف</th>
+                            <th>التعديات</th>
+                            <th>نوع الحوض</th>
+                            <th>اسم الحوض</th>
                             <th>س2</th><th>ط2</th><th>ف2</th>
                         </tr>
                     </thead>
@@ -95,42 +109,43 @@
     </div>
 
     <script>
-        // البيانات بتيجي من نفس الـ repo
         const CSV_URL = "https://raw.githubusercontent.com/abukora/waqf-pro/main/waqf-pro.csv";
-
         let data = [], fuse;
 
-        Papa.parse(CSV_URL, {
-            download: true,
-            header: true,
-            skipEmptyLines: true,
-            complete: function(res) {
-                data = res.data.map((r,i) => ({
-                    serial: i+1,
-                    holder: (r["اسم المستأجر"] || "").trim(),
-                    waqf: (r["اسم الوقف"] || "فاطمه هانم البقلية").trim(),
-                    area: (r["الناحية"] || "").trim(),
-                    s: parseInt(r["س"]) || 0,
-                    t: parseInt(r["ط"]) || 0,
-                    f: parseInt(r["ف"]) || 0,
-                    encroach: (r["التعديات"] || "لا يوجد").trim(),
-                    basinType: (r["الحوض/منافع"] || "").trim(),
-                    basinName: (r["اسم الحوض"] || "").trim(),
-                    s2: r["س2"] || "",
-                    t2: r["ط2"] || "",
-                    f2: r["ف2"] || "",
-                    extra: (r["واضع اليد 1"] || "").trim()
-                })).filter(x => x.holder);
+        // دالة تصدير أفضل باستخدام SheetJS (أكثر استقرارًا من TableExport)
+        function exportToExcel() {
+            const filteredData = getCurrentResults();
+            const ws = XLSX.utils.json_to_sheet(filteredData.map(item => ({
+                "م": item.serial,
+                "اسم المستأجر / واضع اليد": item.holder + (item.extra ? " ("+item.extra+")" : ""),
+                "اسم الوقف": item.waqf,
+                "الناحية": item.area,
+                "س": item.s,
+                "ط": item.t,
+                "ف": item.f,
+                "التعديات": item.encroach,
+                "نوع الحوض": item.basinType,
+                "اسم الحوض": item.basinName,
+                "س2": item.s2,
+                "ط2": item.t2,
+                "ف2": item.f2
+            })));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "وقف فاطمة هانم");
+            XLSX.writeFile(wb, "وقف_فاطمة_هانم_البقلية_" + new Date().toISOString().slice(0,10) + ".xlsx");
+        }
 
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('app').style.display = 'block';
-                document.getElementById('totalCount').textContent = data.length;
-                populateFilters();
-                renderResults(data);
-            }
-        });
-
-        const options = {keys:['holder','waqf','area','encroach','basinType','basinName','s','t','f','s2','t2','f2','extra'], threshold:0.3};
+        function getCurrentResults() {
+            let f = [...data];
+            const q = document.getElementById('globalSearch').value.trim();
+            if(q){ if(!fuse) fuse = new Fuse(data, {keys:Object.keys(data[0]||{}), threshold:0.3}); 
+                   f = fuse.search(q).map(x => x.item); }
+            const h = document.getElementById('filterHolder').value;
+            if(h) f = f.filter(x => x.holder === h);
+            const b = document.getElementById('filterBasin').value;
+            if(b) f = f.filter(x => x.basinName === b);
+            return f;
+        }
 
         function renderResults(items) {
             const tbody = document.getElementById('tableBody'); tbody.innerHTML = '';
@@ -139,50 +154,93 @@
 
             items.forEach(item => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${item.serial}</td>
-                    <td class="highlight">${item.holder}${item.extra?`<br><small style="color:#c41e3a">(${item.extra})</small>`:""}</td>
-                    <td>${item.waqf}</td><td>${item.area}</td>
+                tr.innerHTML = `
+                    <td>${item.serial}</td>
+                    <td class="highlight">${item.holder}${item.extra ? `<br><small style="color:#c41e3a">(${item.extra})</small>` : ""}</td>
+                    <td>${item.waqf}</td>
+                    <td>${item.area}</td>
                     <td>${item.s}</td><td>${item.t}</td><td>${item.f}</td>
-                    <td>${item.encroach}</td><td>${item.basinType}</td><td>${item.basinName}</td>
+                    <td>${item.encroach}</td>
+                    <td>${item.basinType}</td>
+                    <td>${item.basinName}</td>
                     <td>${item.s2}</td><td>${item.t2}</td><td>${item.f2}</td>`;
                 tbody.appendChild(tr);
 
-                const card = document.createElement('div'); card.className='card';
+                const card = document.createElement('div'); 
+                card.className = 'card';
                 card.innerHTML = `<h3>رقم ${item.serial} - ${item.holder}</h3>
                     <p><span>الوقف:</span> ${item.waqf}</p>
                     <p><span>الناحية:</span> ${item.area}</p>
-                    <p><span>المساحة:</span> ${item.s}س ${item.t}ط ${item.f}ف</p>
+                    <p><span>المساحة:</span> ${item.s} سجل، ${item.t} طابو، ${item.f} فدان</p>
                     <p><span>التعديات:</span> ${item.encroach}</p>
                     <p><span>الحوض:</span> ${item.basinType} - ${item.basinName}</p>
-                    <p><span>فرعي:</span> ${item.s2} ${item.t2} ${item.f2}</p>`;
+                    ${item.s2 || item.t2 || item.f2 ? `<p><span>فرعي:</span> ${item.s2} ${item.t2} ${item.f2}</p>` : ''}
+                    ${item.extra ? `<p><span>واضع يد إضافي:</span> ${item.extra}</p>` : ''}`;
                 cards.appendChild(card);
             });
         }
 
         function populateFilters() {
-            const holders = [...new Set(data.map(x=>x.holder))].sort();
-            const basins = [...new Set(data.map(x=>x.basinName))].filter(Boolean).sort();
-            const h = document.getElementById('filterHolder');
-            const b = document.getElementById('filterBasin');
-            holders.forEach(x=>{let o=new Option(x,x); h.add(o);});
-            basins.forEach(x=>{let o=new Option(x,x); b.add(o);});
+            const holders = [...new Set(data.map(x => x.holder))].sort((a,b) => a.localeCompare(b, 'ar'));
+            const basins = [...new Set(data.map(x => x.basinName))].filter(Boolean).sort((a,b) => a.localeCompare(b, 'ar'));
+            
+            const hSelect = document.getElementById('filterHolder');
+            const bSelect = document.getElementById('filterBasin');
+            
+            holders.forEach(name => hSelect.add(new Option(name, name)));
+            basins.forEach(name => bSelect.add(new Option(name, name)));
         }
 
         function filterData() {
-            let f = [...data];
-            const q = document.getElementById('globalSearch').value.trim();
-            if(q){ if(!fuse) fuse=new Fuse(data,options); f=fuse.search(q).map(x=>x.item); }
-            const h = document.getElementById('filterHolder').value;
-            if(h) f=f.filter(x=>x.holder===h);
-            const b = document.getElementById('filterBasin').value;
-            if(b) f=f.filter(x=>x.basinName===b);
-            renderResults(f);
+            renderResults(getCurrentResults());
         }
 
-        function exportToExcel(){ 
-            TableExport(document.getElementById('resultsTable'),{filename:'وقف_فاطمة_هانم_البقلية',formats:['xlsx']}); 
-        }
+        // تحميل البيانات مع معالجة الأخطاء
+        Papa.parse(CSV_URL, {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            encoding: "UTF-8",
+            error: function(err) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = "فشل تحميل البيانات. تأكد من الاتصال بالإنترنت أو جرب لاحقًا.";
+            },
+            complete: function(res) {
+                if (res.data.length === 0) {
+                    document.getElementById('error').style.display = 'block';
+                    document.getElementById('error').textContent = "لم يتم العثور على بيانات. قد يكون الملف فارغًا أو غير متاح.";
+                    document.getElementById('loading').style.display = 'none';
+                    return;
+                }
 
+                data = res.data.map((r, i) => ({
+                    serial: i + 1,
+                    holder: (r["اسم المستأجر"] || "").trim(),
+                    waqf: (r["اسم الوقف"] || "فاطمة هانم البقلية").trim(),
+                    area: (r["الناحية"] || "").trim(),
+                    s: parseInt(r["س"]) || 0,
+                    t: parseInt(r["ط"]) || 0,
+                    f: parseInt(r["ف"]) || 0,
+                    encroach: (r["التعديات"] || "لا يوجد").trim(),
+                    basinType: (r["الحوض/منافع"] || "").trim(),
+                    basinName: (r["اسم الحوض"] || "").trim(),
+                    s2: (r["س2"] || "").trim(),
+                    t2: (r["ط2"] || "").trim(),
+                    f2: (r["ف2"] || "").trim(),
+                    extra: (r["واضع اليد 1"] || "").trim()
+                })).filter(x => x.holder);
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('app').style.display = 'block';
+                document.getElementById('totalCount').textContent = data.length;
+
+                populateFilters();
+                renderResults(data);
+            }
+        });
+
+        // الأحداث
         document.getElementById('globalSearch').addEventListener('input', filterData);
         document.getElementById('filterHolder').addEventListener('change', filterData);
         document.getElementById('filterBasin').addEventListener('change', filterData);
