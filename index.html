@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>نظام بحث وقف فاطمة هانم البقلية</title>
     
-    <!-- تحسين الأداء: تحميل المكتبات بشكل أسرع -->
     <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
@@ -39,10 +38,11 @@
         td{padding:16px 10px;text-align:center;border-bottom:1px solid var(--border)}
         tr:hover{background:#f8f9fa}
         .highlight{background:#dbeafe!important;font-weight:bold;color:#1e40af}
+        .journal-num{font-weight:900;font-size:1.1em;color:#1e40af}
         .card-view{display:none;padding:15px}
         .card{background:white;border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:18px;box-shadow:0 4px 15px rgba(0,0,0,.08)}
-        .card h3{background:var(--accent);color:white;padding:12px;border-radius:10px;margin:-20px -20px 20px -20px;font-size:1.2rem}
-        .card p{margin:10px 0}.card span{font-weight:bold;color:var(--main)}
+        .card h3{background:var(--accent);color:white;padding:15px;border-radius:10px;margin:-20px -20px 20px -20px;font-size:1.4rem;text-align:center}
+        .card p{margin:12px 0}.card span{font-weight:bold;color:var(--main)}
         .error{color:#c41e3a;background:#fee2e2;padding:20px;border-radius:12px;margin:20px;text-align:center}
         @media(max-width:992px){.table-container{display:none}.card-view{display:block}h1{font-size:1.9rem}}
         @media(max-width:480px){.actions{flex-direction:column}.btn{width:100%;justify-content:center}}
@@ -57,7 +57,7 @@
 
         <div class="loading" id="loading">
             <i class="fas fa-spinner fa-spin fa-3x"></i><br><br>
-            جاري تحميل البيانات من المصدر...
+            جاري تحميل البيانات...
         </div>
 
         <div id="error" class="error" style="display:none;"></div>
@@ -68,28 +68,28 @@
                     <i class="fas fa-file-excel"></i> تصدير إلى إكسل
                 </button>
                 <button class="btn btn-primary" onclick="window.print()">
-                    <i class="fas fa-print"></i> طباعة النتائج
+                    <i class="fas fa-print"></i> طباعة
                 </button>
             </div>
 
             <div class="controls">
                 <div class="search-box">
                     <i class="fas fa-search search-icon"></i>
-                    <input type="text" id="globalSearch" placeholder="ابحث عن أي شيء: اسم، رقم، حوض، تعديات، ناحية...">
+                    <input type="text" id="globalSearch" placeholder="ابحث برقم الجريدة أو الاسم أو الحوض أو التعديات...">
                 </div>
                 <select id="filterHolder"><option value="">جميع واضعي اليد</option></select>
                 <select id="filterBasin"><option value="">جميع الأحواض</option></select>
             </div>
 
             <div class="stats">
-                تم العثور على <strong><span id="resultCount">0</span></strong> سجل من إجمالي <strong><span id="totalCount">0</span></strong> سجل
+                تم العثور على <strong><span id="resultCount">0</span></strong> سجل من إجمالي <strong><span id="totalCount">0</span></strong>
             </div>
 
             <div class="table-container">
                 <table id="resultsTable">
                     <thead>
                         <tr>
-                            <th>م</th>
+                            <th>الجريده</th>
                             <th>اسم المستأجر / واضع اليد</th>
                             <th>اسم الوقف</th>
                             <th>الناحية</th>
@@ -112,11 +112,15 @@
         const CSV_URL = "https://raw.githubusercontent.com/abukora/waqf-pro/main/waqf-pro.csv";
         let data = [], fuse;
 
-        // دالة تصدير أفضل باستخدام SheetJS (أكثر استقرارًا من TableExport)
+        const options = {
+            keys: ['journalNumber','holder','waqf','area','encroach','basinType','basinName','s','t','f','s2','t2','f2','extra'],
+            threshold: 0.3
+        };
+
         function exportToExcel() {
             const filteredData = getCurrentResults();
             const ws = XLSX.utils.json_to_sheet(filteredData.map(item => ({
-                "م": item.serial,
+                "الجريده": item.journalNumber,
                 "اسم المستأجر / واضع اليد": item.holder + (item.extra ? " ("+item.extra+")" : ""),
                 "اسم الوقف": item.waqf,
                 "الناحية": item.area,
@@ -138,12 +142,14 @@
         function getCurrentResults() {
             let f = [...data];
             const q = document.getElementById('globalSearch').value.trim();
-            if(q){ if(!fuse) fuse = new Fuse(data, {keys:Object.keys(data[0]||{}), threshold:0.3}); 
-                   f = fuse.search(q).map(x => x.item); }
+            if (q) {
+                if (!fuse) fuse = new Fuse(data, options);
+                f = fuse.search(q).map(x => x.item);
+            }
             const h = document.getElementById('filterHolder').value;
-            if(h) f = f.filter(x => x.holder === h);
+            if (h) f = f.filter(x => x.holder === h);
             const b = document.getElementById('filterBasin').value;
-            if(b) f = f.filter(x => x.basinName === b);
+            if (b) f = f.filter(x => x.basinName === b);
             return f;
         }
 
@@ -153,29 +159,28 @@
             document.getElementById('resultCount').textContent = items.length;
 
             items.forEach(item => {
+                // الجدول
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${item.serial}</td>
+                    <td class="journal-num"><strong>${item.journalNumber}</strong></td>
                     <td class="highlight">${item.holder}${item.extra ? `<br><small style="color:#c41e3a">(${item.extra})</small>` : ""}</td>
-                    <td>${item.waqf}</td>
-                    <td>${item.area}</td>
+                    <td>${item.waqf}</td><td>${item.area}</td>
                     <td>${item.s}</td><td>${item.t}</td><td>${item.f}</td>
-                    <td>${item.encroach}</td>
-                    <td>${item.basinType}</td>
-                    <td>${item.basinName}</td>
+                    <td>${item.encroach}</td><td>${item.basinType}</td><td>${item.basinName}</td>
                     <td>${item.s2}</td><td>${item.t2}</td><td>${item.f2}</td>`;
                 tbody.appendChild(tr);
 
-                const card = document.createElement('div'); 
-                card.className = 'card';
-                card.innerHTML = `<h3>رقم ${item.serial} - ${item.holder}</h3>
+                // الكارت
+                const card = document.createElement('div'); card.className = 'card';
+                card.innerHTML = `
+                    <h3>الجريده: ${item.journalNumber}</h3>
+                    <p><span>المستأجر:</span> ${item.holder} ${item.extra ? `<small style="color:#c41e3a">(${item.extra})</small>` : ""}</p>
                     <p><span>الوقف:</span> ${item.waqf}</p>
                     <p><span>الناحية:</span> ${item.area}</p>
-                    <p><span>المساحة:</span> ${item.s} سجل، ${item.t} طابو، ${item.f} فدان</p>
+                    <p><span>المساحة:</span> ${item.s} س، ${item.t} ط، ${item.f} ف</p>
                     <p><span>التعديات:</span> ${item.encroach}</p>
                     <p><span>الحوض:</span> ${item.basinType} - ${item.basinName}</p>
-                    ${item.s2 || item.t2 || item.f2 ? `<p><span>فرعي:</span> ${item.s2} ${item.t2} ${item.f2}</p>` : ''}
-                    ${item.extra ? `<p><span>واضع يد إضافي:</span> ${item.extra}</p>` : ''}`;
+                    ${item.s2 || item.t2 || item.f2 ? `<p><span>فرعي:</span> ${item.s2} ${item.t2} ${item.f2}</p>` : ''}`;
                 cards.appendChild(card);
             });
         }
@@ -183,10 +188,8 @@
         function populateFilters() {
             const holders = [...new Set(data.map(x => x.holder))].sort((a,b) => a.localeCompare(b, 'ar'));
             const basins = [...new Set(data.map(x => x.basinName))].filter(Boolean).sort((a,b) => a.localeCompare(b, 'ar'));
-            
             const hSelect = document.getElementById('filterHolder');
             const bSelect = document.getElementById('filterBasin');
-            
             holders.forEach(name => hSelect.add(new Option(name, name)));
             basins.forEach(name => bSelect.add(new Option(name, name)));
         }
@@ -195,27 +198,28 @@
             renderResults(getCurrentResults());
         }
 
-        // تحميل البيانات مع معالجة الأخطاء
+        // تحميل البيانات
         Papa.parse(CSV_URL, {
             download: true,
             header: true,
             skipEmptyLines: true,
             encoding: "UTF-8",
-            error: function(err) {
+            error: function() {
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('error').style.display = 'block';
-                document.getElementById('error').textContent = "فشل تحميل البيانات. تأكد من الاتصال بالإنترنت أو جرب لاحقًا.";
+                document.getElementById('error').textContent = "فشل تحميل البيانات. تأكد من الاتصال بالإنترنت.";
             },
             complete: function(res) {
-                if (res.data.length === 0) {
+                if (!res.data || res.data.length === 0) {
                     document.getElementById('error').style.display = 'block';
-                    document.getElementById('error').textContent = "لم يتم العثور على بيانات. قد يكون الملف فارغًا أو غير متاح.";
+                    document.getElementById('error').textContent = "لا توجد بيانات لعرضها.";
                     document.getElementById('loading').style.display = 'none';
                     return;
                 }
 
                 data = res.data.map((r, i) => ({
                     serial: i + 1,
+                    journalNumber: (r["الجريده"] || r["الجريده"] || r["الجريده"] || r["كود"] || r["كود المستأجر"] || "غير محدد").trim() || "غير محدد",
                     holder: (r["اسم المستأجر"] || "").trim(),
                     waqf: (r["اسم الوقف"] || "فاطمة هانم البقلية").trim(),
                     area: (r["الناحية"] || "").trim(),
@@ -240,7 +244,6 @@
             }
         });
 
-        // الأحداث
         document.getElementById('globalSearch').addEventListener('input', filterData);
         document.getElementById('filterHolder').addEventListener('change', filterData);
         document.getElementById('filterBasin').addEventListener('change', filterData);
